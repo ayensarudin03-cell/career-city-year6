@@ -20,8 +20,55 @@ listen:[['What is the speaker’s dream job?',['Chef','Veterinarian','Pilot'],1]
 };
 const listeningScript='Hello! My name is Lina. When I grow up, I want to be a veterinarian because I love animals. A veterinarian works at an animal clinic and helps sick animals feel better. I think a good veterinarian must be gentle and patient. I hope to help many animals in the future.';
 let extraCurrent='',extraIndex=0,extraScore=0,extraAnswered=false;
-function makeExtraQuiz(type,target){extraCurrent=type;extraIndex=0;extraScore=0;drawExtraQuiz(target)}
-function drawExtraQuiz(target){const list=extraQuizzes[extraCurrent],q=list[extraIndex];document.getElementById(target).innerHTML='<p><b>Question '+(extraIndex+1)+' of '+list.length+'</b></p><div class="progress"><div style="width:'+Math.round(extraIndex/list.length*100)+'%"></div></div><h3>'+q[0]+'</h3><div class="answers" id="extraOptions"></div><p class="feedback" id="extraFeedback" aria-live="polite"></p><button class="primary hidden" id="extraNext">Next →</button>';extraAnswered=false;q[1].forEach((a,i)=>{let b=document.createElement('button');b.textContent=a;b.onclick=()=>{if(extraAnswered)return;extraAnswered=true;let ok=i===q[2];if(ok)extraScore++;document.querySelectorAll('#extraOptions button').forEach((btn,k)=>{btn.disabled=true;if(k===q[2])btn.classList.add('correct');else if(k===i)btn.classList.add('wrong')});document.getElementById('extraFeedback').textContent=ok?'Correct! 🌟':'The correct answer is highlighted.';let next=document.getElementById('extraNext');next.classList.remove('hidden');next.textContent=extraIndex===list.length-1?'See result 🏆':'Next →';next.onclick=()=>{extraIndex++;if(extraIndex<list.length){drawExtraQuiz(target)}else{let key=extraCurrent==='pre'?'preScore':extraCurrent==='post'?'postScore':extraCurrent+'Score';state[key]=Math.max(state[key]||0,extraScore);if(extraCurrent==='post'&&!state.postReward){state.postReward=true;earn(20)}else save();document.getElementById(target).innerHTML='<h3>🎉 Score: '+extraScore+'/'+list.length+'</h3><p>Review the lessons and try again to improve!</p><button class="primary" id="extraRestart">Try again 🔄</button>';document.getElementById('extraRestart').onclick=()=>makeExtraQuiz(extraCurrent,target)}}};document.getElementById('extraOptions').appendChild(b)})}
+const extraSessions={};
+function makeExtraQuiz(type,target){
+  extraSessions[target]={type,index:0,score:0,answered:false};
+  drawExtraQuiz(target);
+}
+function drawExtraQuiz(target){
+  const session=extraSessions[target],list=extraQuizzes[session.type],q=list[session.index],root=document.getElementById(target);
+  if(!root||!q)return;
+  session.answered=false;
+  const isFill=session.type==='grammar'&&[0,2,4,6,8].includes(session.index);
+  root.innerHTML='<p><b>Question '+(session.index+1)+' of '+list.length+'</b></p>'+
+    '<div class="progress"><div style="width:'+Math.round(session.index/list.length*100)+'%"></div></div>'+
+    '<h3>'+q[0]+'</h3><div class="answers" id="'+target+'Options"></div>'+
+    '<p class="feedback" id="'+target+'Feedback" aria-live="polite"></p>'+
+    '<button class="primary hidden" id="'+target+'Next">Next question →</button>';
+  const opts=document.getElementById(target+'Options'),feedback=document.getElementById(target+'Feedback'),next=document.getElementById(target+'Next');
+  function submit(ok,chosen){
+    if(session.answered)return;
+    session.answered=true;
+    if(ok)session.score++;
+    feedback.textContent=ok?'✅ Correct! Well done!':'💡 Good try! Correct answer: '+q[1][q[2]];
+    feedback.style.color=ok?'#166534':'#9a3412';
+    opts.querySelectorAll('button').forEach(b=>b.disabled=true);
+    const field=opts.querySelector('input');if(field)field.disabled=true;
+    if(chosen)chosen.classList.add(ok?'correct':'wrong');
+    next.classList.remove('hidden');
+    next.textContent=session.index===list.length-1?'View my results 🏆':'Next question →';
+    next.onclick=()=>{
+      session.index++;
+      if(session.index<list.length){drawExtraQuiz(target);root.scrollIntoView({behavior:'smooth',block:'start'});}
+      else{
+        const key=session.type==='pre'?'preScore':session.type==='post'?'postScore':session.type+'Score';
+        state[key]=Math.max(state[key]||0,session.score);
+        if(session.type==='post'&&!state.postReward){state.postReward=true;earn(20);}else save();
+        root.innerHTML='<h3>🏆 Mission Complete!</h3><p style="font-size:1.4rem;font-weight:700">Your score: '+session.score+' / '+list.length+'</p><p>'+(session.score===list.length?'Perfect score! 🌟':'Great effort! Review the lessons and try again.')+'</p><button class="primary" id="'+target+'Restart">Try again 🔄</button>';
+        document.getElementById(target+'Restart').onclick=()=>makeExtraQuiz(session.type,target);
+        root.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+    };
+  }
+  if(isFill){
+    const hint=document.createElement('p');hint.className='muted';hint.textContent='✏️ Fill in the blank. Type the correct word or phrase.';opts.appendChild(hint);
+    const input=document.createElement('input');input.type='text';input.placeholder='Type your answer here';input.setAttribute('aria-label','Fill in the blank');input.autocomplete='off';opts.appendChild(input);
+    const check=document.createElement('button');check.className='primary';check.textContent='Check answer ✓';check.onclick=()=>{const typed=input.value.trim().toLowerCase().replace(/\s+/g,' ');if(!typed){feedback.textContent='Please type an answer first.';return;}submit(typed===q[1][q[2]].toLowerCase(),check);};opts.appendChild(check);
+    input.addEventListener('keydown',e=>{if(e.key==='Enter')check.click();});
+  }else{
+    q[1].forEach((answer,i)=>{const b=document.createElement('button');b.textContent=String.fromCharCode(65+i)+'. '+answer;b.onclick=()=>{submit(i===q[2],b);if(i!==q[2]){opts.querySelectorAll('button')[q[2]].classList.add('correct');}};opts.appendChild(b);});
+  }
+}
 const testQuestions=[['Who helps sick people?',['Doctor','Chef','Pilot'],0],['She ___ to be a scientist.',['want','wants','wanting'],1],['Who works in a kitchen?',['Chef','Teacher','Astronaut'],0],['I want to be ___ engineer.',['a','an','at'],1],['A pilot ___ aeroplanes.',['flies','fly','flying'],0],['What does a photographer use?',['Camera','Fire hose','Microscope'],0],['I want to be a vet ___ I love animals.',['because','or','but'],0],['Where does a teacher work?',['School','Airport','Space station'],0],['A firefighter ___ people.',['help','helps','helping'],1],['Which job studies experiments?',['Scientist','Chef','Pilot'],0]];
 extraQuizzes.pre=testQuestions;extraQuizzes.post=testQuestions;
 document.getElementById('vocabLabContent').innerHTML='<div class="grid">'+jobs.map(j=>'<div class="job"><div class="emoji">'+j[0]+'</div><h3>'+j[1]+'</h3><p>'+j[3]+'.</p><p><b>Workplace:</b> '+j[2]+'</p><button onclick="sayWord(this.dataset.word)" data-word="'+j[1]+'">🔊 Hear word</button></div>').join('')+'</div><h3>🧩 Vocabulary Test</h3><button class="primary" onclick="makeExtraQuiz(\'vocab\',\'vocabQuizBox\')">Start 10-question test</button><div id="vocabQuizBox"></div>';
